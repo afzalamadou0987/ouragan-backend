@@ -14,7 +14,6 @@ const {
 } = require('../models/index');
 const { Op } = require('sequelize');
 
-// Générer un numéro de commande unique
 const generateOrderNumber = () => {
   const date = new Date();
   const year = date.getFullYear();
@@ -24,25 +23,10 @@ const generateOrderNumber = () => {
   return `OUR-${year}${month}${day}-${random}`;
 };
 
-// ✅ CRÉER UNE COMMANDE
 exports.createOrder = async (req, res) => {
   try {
     const { addressId, promoCode, notes, shippingCost = 0, paymentMethod = 'cash' } = req.body;
-    const order = await Order.create({
-  userId: req.user.id,
-  addressId,
-  orderNumber: generateOrderNumber(),
-  subTotal: cart.totalAmount,
-  shippingCost,
-  discount,
-  totalAmount,
-  promoCode: promoCode || null,
-      notes: notes || null,
-      paymentMethod: paymentMethod || 'cash',
-  estimatedDelivery: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000)
-});
 
-    // Récupérer le panier
     const cart = await Cart.findOne({
       where: { userId: req.user.id },
       include: [
@@ -64,7 +48,6 @@ exports.createOrder = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Votre panier est vide' });
     }
 
-    // Vérifier l'adresse
     const address = await Address.findOne({
       where: { id: addressId, userId: req.user.id }
     });
@@ -73,7 +56,6 @@ exports.createOrder = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Adresse introuvable' });
     }
 
-    // Calculer la remise promo
     let discount = 0;
     let promo = null;
     if (promoCode) {
@@ -98,7 +80,6 @@ exports.createOrder = async (req, res) => {
 
     const totalAmount = cart.totalAmount + shippingCost - discount;
 
-    // Créer la commande
     const order = await Order.create({
       userId: req.user.id,
       addressId,
@@ -113,7 +94,6 @@ exports.createOrder = async (req, res) => {
       estimatedDelivery: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000)
     });
 
-    // Créer les items de commande
     for (const item of cart.items) {
       const product = item.product;
 
@@ -130,13 +110,11 @@ exports.createOrder = async (req, res) => {
         commission: product.sellerId ? (item.totalPrice * 10) / 100 : 0
       });
 
-      // Déduire le stock
       await Product.update(
         { stock: product.stock - item.quantity },
         { where: { id: product.id } }
       );
 
-      // Créer la commission si c'est un produit marketplace
       if (product.sellerId) {
         const seller = await Seller.findByPk(product.sellerId);
         const commissionAmount = (item.totalPrice * seller.commissionRate) / 100;
@@ -154,11 +132,9 @@ exports.createOrder = async (req, res) => {
       }
     }
 
-    // Vider le panier
     await CartItem.destroy({ where: { cartId: cart.id } });
     await cart.update({ totalAmount: 0, totalItems: 0 });
 
-    // Récupérer la commande complète
     const fullOrder = await Order.findByPk(order.id, {
       include: [
         { model: OrderItem, as: 'items' },
@@ -176,7 +152,6 @@ exports.createOrder = async (req, res) => {
   }
 };
 
-// ✅ MES COMMANDES
 exports.getMyOrders = async (req, res) => {
   try {
     const { page = 1, limit = 10, status } = req.query;
@@ -208,7 +183,6 @@ exports.getMyOrders = async (req, res) => {
   }
 };
 
-// ✅ DETAIL D'UNE COMMANDE
 exports.getOrderById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -242,7 +216,6 @@ exports.getOrderById = async (req, res) => {
   }
 };
 
-// ✅ ANNULER UNE COMMANDE
 exports.cancelOrder = async (req, res) => {
   try {
     const { id } = req.params;
@@ -264,7 +237,6 @@ exports.cancelOrder = async (req, res) => {
 
     await order.update({ status: 'cancelled' });
 
-    // Remettre le stock
     const items = await OrderItem.findAll({ where: { orderId: order.id } });
     for (const item of items) {
       await Product.increment('stock', {
@@ -280,7 +252,6 @@ exports.cancelOrder = async (req, res) => {
   }
 };
 
-// ✅ SUIVRE UNE COMMANDE
 exports.trackOrder = async (req, res) => {
   try {
     const { orderNumber } = req.params;
@@ -316,4 +287,3 @@ exports.trackOrder = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-
