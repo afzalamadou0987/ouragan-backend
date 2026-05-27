@@ -39,8 +39,6 @@ exports.createOrder = async (req, res) => {
   promoCode: promoCode || null,
       notes: notes || null,
       paymentMethod: paymentMethod || 'cash',
-  paymentMethod: paymentMethod || 'cash',
-  paymentStatus: paymentMethod === 'cash' ? 'pending' : 'pending',
   estimatedDelivery: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000)
 });
 
@@ -318,3 +316,4 @@ exports.trackOrder = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
