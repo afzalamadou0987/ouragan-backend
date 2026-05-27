@@ -46,7 +46,7 @@ const PORT = process.env.PORT || 5000;
 
 const start = async () => {
   await connectDB();
-  await sequelize.sync({ alter: true });
+  await sequelize.sync({ alter: false });
   console.log('✅ Base de données synchronisée !');
   app.listen(PORT, () => {
     console.log(`✅ Serveur OURAGAN lancé sur le port ${PORT}`);
