@@ -27,7 +27,22 @@ const generateOrderNumber = () => {
 // ✅ CRÉER UNE COMMANDE
 exports.createOrder = async (req, res) => {
   try {
-    const { addressId, promoCode, notes, shippingCost = 0 } = req.body;
+    const { addressId, promoCode, notes, shippingCost = 0, paymentMethod = 'cash' } = req.body;
+    const order = await Order.create({
+  userId: req.user.id,
+  addressId,
+  orderNumber: generateOrderNumber(),
+  subTotal: cart.totalAmount,
+  shippingCost,
+  discount,
+  totalAmount,
+  promoCode: promoCode || null,
+      notes: notes || null,
+      paymentMethod: paymentMethod || 'cash',
+  paymentMethod: paymentMethod || 'cash',
+  paymentStatus: paymentMethod === 'cash' ? 'pending' : 'pending',
+  estimatedDelivery: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000)
+});
 
     // Récupérer le panier
     const cart = await Cart.findOne({
@@ -96,6 +111,7 @@ exports.createOrder = async (req, res) => {
       totalAmount,
       promoCode: promoCode || null,
       notes: notes || null,
+      paymentMethod: paymentMethod || 'cash',
       estimatedDelivery: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000)
     });
 
