@@ -117,6 +117,22 @@ Wishlist.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 Product.hasMany(Wishlist, { foreignKey: 'productId', as: 'wishlist' });
 Wishlist.belongsTo(Product, { foreignKey: 'productId', as: 'product' });
 
+const Delivery = require('./Delivery');
+const Message = require('./Message');
+
+// Delivery associations
+Delivery.belongsTo(Order, { foreignKey: 'orderId', as: 'order' });
+Order.hasOne(Delivery, { foreignKey: 'orderId', as: 'delivery' });
+
+Delivery.belongsTo(User, { foreignKey: 'livreurId', as: 'livreur' });
+User.hasMany(Delivery, { foreignKey: 'livreurId', as: 'deliveries' });
+
+// Message associations
+Message.belongsTo(Delivery, { foreignKey: 'deliveryId', as: 'delivery' });
+Delivery.hasMany(Message, { foreignKey: 'deliveryId', as: 'messages' });
+
+Message.belongsTo(User, { foreignKey: 'senderId', as: 'sender' });
+Message.belongsTo(User, { foreignKey: 'receiverId', as: 'receiver' });
 module.exports = {
   sequelize,
   User,
@@ -134,5 +150,8 @@ module.exports = {
   Payment,
   Commission,
   Wishlist,
-  Promo
+  Promo,
+  Delivery,
+  Message
 };
+
