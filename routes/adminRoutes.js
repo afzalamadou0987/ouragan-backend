@@ -33,6 +33,41 @@ router.put('/sellers/:id/verify', protect, restrictTo('admin'), verifySeller);
 // Produits
 router.get('/products', protect, restrictTo('admin'), getAllProducts);
 router.post('/products', protect, restrictTo('admin'), addOuraganProduct);
+router.put('/products/:id', protect, restrictTo('admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { Product, ProductImage } = require('../models/index');
+
+    const product = await Product.findByPk(id);
+    if (!product) {
+      return res.status(404).json({ success: false, message: 'Produit introuvable' });
+    }
+
+    const { images, ...productData } = req.body;
+    await product.update(productData);
+
+    if (images && images.length > 0) {
+      const existingCount = await ProductImage.count({ where: { productId: id } });
+      for (let i = 0; i < images.length; i++) {
+        await ProductImage.create({
+          productId: id,
+          url: images[i].url,
+          publicId: images[i].publicId || null,
+          isMain: existingCount === 0 && i === 0,
+          order: existingCount + i
+        });
+      }
+    }
+
+    const fullProduct = await Product.findByPk(id, {
+      include: [{ model: ProductImage, as: 'images' }]
+    });
+
+    res.status(200).json({ success: true, message: 'Produit mis à jour !', product: fullProduct });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
 
 // Commandes
 router.get('/orders', protect, restrictTo('admin'), getAllOrders);
