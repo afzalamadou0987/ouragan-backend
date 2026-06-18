@@ -16,7 +16,6 @@ exports.becomeSeller = async (req, res) => {
   try {
     const { shopName, shopDescription, bankInfo } = req.body;
 
-    // Vérifier si déjà vendeur
     const existingSeller = await Seller.findOne({
       where: { userId: req.user.id }
     });
@@ -28,7 +27,6 @@ exports.becomeSeller = async (req, res) => {
       });
     }
 
-    // Vérifier si le nom de boutique est déjà pris
     const existingShop = await Seller.findOne({ where: { shopName } });
     if (existingShop) {
       return res.status(400).json({
@@ -44,7 +42,6 @@ exports.becomeSeller = async (req, res) => {
       bankInfo: bankInfo || null
     });
 
-    // Mettre à jour le rôle de l'utilisateur
     await User.update(
       { role: 'seller' },
       { where: { id: req.user.id } }
@@ -102,7 +99,7 @@ exports.updateSellerProfile = async (req, res) => {
   }
 };
 
-// ✅ AJOUTER UN PRODUIT
+// ✅ AJOUTER UN PRODUIT (vendeur vérifié OU admin)
 exports.addProduct = async (req, res) => {
   try {
     const {
@@ -117,47 +114,82 @@ exports.addProduct = async (req, res) => {
       weight,
       dimensions,
       tags,
-      specifications
+      specifications,
+      isOuragan,
+      isFeatured,
+      images
     } = req.body;
 
-    const seller = await Seller.findOne({ where: { userId: req.user.id } });
-    if (!seller) {
-      return res.status(404).json({ success: false, message: 'Profil vendeur introuvable' });
+    let sellerId = null;
+
+    if (req.user.role === 'admin') {
+      // L'admin peut créer un produit sans fiche vendeur (produit OURAGAN)
+      const seller = await Seller.findOne({ where: { userId: req.user.id } });
+      sellerId = seller ? seller.id : null;
+    } else {
+      const seller = await Seller.findOne({ where: { userId: req.user.id } });
+      if (!seller) {
+        return res.status(404).json({ success: false, message: 'Profil vendeur introuvable' });
+      }
+      if (!seller.isVerified) {
+        return res.status(403).json({
+          success: false,
+          message: 'Votre boutique doit être vérifiée avant de vendre'
+        });
+      }
+      sellerId = seller.id;
     }
 
-    if (!seller.isVerified) {
-      return res.status(403).json({
+    if (!categoryId || !name || !description || !price) {
+      return res.status(400).json({
         success: false,
-        message: 'Votre boutique doit être vérifiée avant de vendre'
+        message: 'Catégorie, nom, description et prix sont obligatoires'
       });
     }
 
-    // Générer le slug
     const slug = name.toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/(^-|-$)/g, '') + '-' + Date.now();
 
     const product = await Product.create({
-      sellerId: seller.id,
+      sellerId,
       categoryId,
       name,
       slug,
       description,
       price,
       salePrice: salePrice || null,
-      stock,
+      stock: stock || 0,
       sku: sku || null,
       brand: brand || null,
       weight: weight || null,
       dimensions: dimensions || null,
       tags: tags || null,
-      specifications: specifications || null
+      specifications: specifications || null,
+      isOuragan: req.user.role === 'admin' ? (isOuragan || false) : false,
+      isFeatured: isFeatured || false
+    });
+
+    if (images && images.length > 0) {
+      for (let i = 0; i < images.length; i++) {
+        await ProductImage.create({
+          productId: product.id,
+          url: images[i].url,
+          publicId: images[i].publicId || null,
+          isMain: i === 0,
+          order: i
+        });
+      }
+    }
+
+    const fullProduct = await Product.findByPk(product.id, {
+      include: [{ model: ProductImage, as: 'images' }]
     });
 
     res.status(201).json({
       success: true,
       message: 'Produit ajouté !',
-      product
+      product: fullProduct
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -198,26 +230,51 @@ exports.getMyProducts = async (req, res) => {
   }
 };
 
-// ✅ MODIFIER UN PRODUIT
+// ✅ MODIFIER UN PRODUIT (avec ajout d'images possible)
 exports.updateProduct = async (req, res) => {
   try {
     const { id } = req.params;
+    const { images, ...productData } = req.body;
 
-    const seller = await Seller.findOne({ where: { userId: req.user.id } });
-    const product = await Product.findOne({
-      where: { id, sellerId: seller.id }
-    });
+    let product;
+
+    if (req.user.role === 'admin') {
+      product = await Product.findByPk(id);
+    } else {
+      const seller = await Seller.findOne({ where: { userId: req.user.id } });
+      if (!seller) {
+        return res.status(404).json({ success: false, message: 'Profil vendeur introuvable' });
+      }
+      product = await Product.findOne({ where: { id, sellerId: seller.id } });
+    }
 
     if (!product) {
       return res.status(404).json({ success: false, message: 'Produit introuvable' });
     }
 
-    await product.update(req.body);
+    await product.update(productData);
+
+    if (images && images.length > 0) {
+      const existingCount = await ProductImage.count({ where: { productId: product.id } });
+      for (let i = 0; i < images.length; i++) {
+        await ProductImage.create({
+          productId: product.id,
+          url: images[i].url,
+          publicId: images[i].publicId || null,
+          isMain: existingCount === 0 && i === 0,
+          order: existingCount + i
+        });
+      }
+    }
+
+    const fullProduct = await Product.findByPk(product.id, {
+      include: [{ model: ProductImage, as: 'images' }]
+    });
 
     res.status(200).json({
       success: true,
       message: 'Produit mis à jour !',
-      product
+      product: fullProduct
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -229,10 +286,14 @@ exports.deleteProduct = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const seller = await Seller.findOne({ where: { userId: req.user.id } });
-    const product = await Product.findOne({
-      where: { id, sellerId: seller.id }
-    });
+    let product;
+
+    if (req.user.role === 'admin') {
+      product = await Product.findByPk(id);
+    } else {
+      const seller = await Seller.findOne({ where: { userId: req.user.id } });
+      product = await Product.findOne({ where: { id, sellerId: seller.id } });
+    }
 
     if (!product) {
       return res.status(404).json({ success: false, message: 'Produit introuvable' });
