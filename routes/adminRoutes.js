@@ -18,6 +18,7 @@ const {
   deletePromo
 } = require('../controllers/adminController');
 const { protect, restrictTo } = require('../middleware/auth');
+const { Product, ProductImage } = require('../models/index');
 
 // Dashboard
 router.get('/stats', protect, restrictTo('admin'), getDashboardStats);
@@ -36,7 +37,6 @@ router.post('/products', protect, restrictTo('admin'), addOuraganProduct);
 router.put('/products/:id', protect, restrictTo('admin'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { Product, ProductImage } = require('../models/index');
 
     const product = await Product.findByPk(id);
     if (!product) {
