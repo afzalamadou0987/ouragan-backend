@@ -12,8 +12,8 @@ exports.getDashboardStats = async (req, res) => {
     const totalProducts = await Product.count({ where: { isActive: true } });
     const totalOrders   = await Order.count();
     const totalRevenue  = await Order.sum('totalAmount', { where: { paymentStatus: 'paid' } });
-    const pendingOrders   = await Order.count({ where: { status: 'pending' } });
-    const pendingSellers  = await Seller.count({ where: { isVerified: false } });
+    const pendingOrders  = await Order.count({ where: { status: 'pending' } });
+    const pendingSellers = await Seller.count({ where: { isVerified: false } });
 
     const recentOrders = await Order.findAll({
       include: [
@@ -34,10 +34,7 @@ exports.getDashboardStats = async (req, res) => {
       where: { paymentStatus: 'paid', createdAt: { [Op.gte]: last7Days } }
     });
 
-    // Compte les livreurs sans dépendre de l'enum
-    const totalLivreurs = await User.count({
-      where: { role: { [Op.in]: ['livreur', 'delivery', 'driver'] } }
-    });
+    const totalLivreurs = 0; // livreur pas encore dans l'enum
 
     res.status(200).json({
       success: true,
@@ -61,7 +58,7 @@ exports.getAnalytics = async (req, res) => {
     const period = req.query.period || '30d';
     const daysMap = { '7d': 7, '30d': 30, '90d': 90, all: null };
     const days = period in daysMap ? daysMap[period] : 30;
-    const since    = days ? new Date(Date.now() - days * 86400000) : new Date('2000-01-01');
+    const since     = days ? new Date(Date.now() - days * 86400000) : new Date('2000-01-01');
     const prevSince = days ? new Date(Date.now() - 2 * days * 86400000) : new Date('2000-01-01');
     const WHERE = `o.status <> 'cancelled' AND o."createdAt" >= :since`;
 
@@ -98,7 +95,7 @@ exports.getAnalytics = async (req, res) => {
     const orders      = Number(overview.orders);
     const prevRevenue = Number(prev.revenue);
     const growth = prevRevenue > 0 ? Math.round(((revenue - prevRevenue) / prevRevenue) * 1000) / 10 : null;
-    const ouragan    = split.find((s) => s.is_ouragan === true)  || { revenue: 0, items: 0, orders: 0 };
+    const ouragan     = split.find((s) => s.is_ouragan === true)  || { revenue: 0, items: 0, orders: 0 };
     const marketplace = split.find((s) => s.is_ouragan === false) || { revenue: 0, items: 0, orders: 0 };
 
     res.json({
