@@ -7,13 +7,14 @@ const { Op, QueryTypes } = require('sequelize');
 // ✅ DASHBOARD STATS
 exports.getDashboardStats = async (req, res) => {
   try {
-    const totalUsers = await User.count({ where: { role: 'client' } });
-    const totalSellers = await Seller.count();
+    const totalUsers    = await User.count({ where: { role: 'client' } });
+    const totalSellers  = await Seller.count();
     const totalProducts = await Product.count({ where: { isActive: true } });
-    const totalOrders = await Order.count();
-    const totalRevenue = await Order.sum('totalAmount', { where: { paymentStatus: 'paid' } });
-    const pendingOrders = await Order.count({ where: { status: 'pending' } });
-    const pendingSellers = await Seller.count({ where: { isVerified: false } });
+    const totalOrders   = await Order.count();
+    const totalRevenue  = await Order.sum('totalAmount', { where: { paymentStatus: 'paid' } });
+    const pendingOrders   = await Order.count({ where: { status: 'pending' } });
+    const pendingSellers  = await Seller.count({ where: { isVerified: false } });
+
     const recentOrders = await Order.findAll({
       include: [
         { model: User, as: 'user', attributes: ['firstName', 'lastName', 'email'] },
@@ -21,22 +22,29 @@ exports.getDashboardStats = async (req, res) => {
       ],
       order: [['createdAt', 'DESC']], limit: 10
     });
+
     const recentUsers = await User.findAll({
       attributes: { exclude: ['password'] },
       order: [['createdAt', 'DESC']], limit: 5
     });
+
     const last7Days = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const weeklyOrders = await Order.count({ where: { createdAt: { [Op.gte]: last7Days } } });
+    const weeklyOrders  = await Order.count({ where: { createdAt: { [Op.gte]: last7Days } } });
     const weeklyRevenue = await Order.sum('totalAmount', {
       where: { paymentStatus: 'paid', createdAt: { [Op.gte]: last7Days } }
     });
-    const totalLivreurs = await User.count({ where: { role: 'livreur' } });
+
+    // Compte les livreurs sans dépendre de l'enum
+    const totalLivreurs = await User.count({
+      where: { role: { [Op.in]: ['livreur', 'delivery', 'driver'] } }
+    });
 
     res.status(200).json({
       success: true,
       stats: {
         totalUsers, totalSellers, totalProducts, totalOrders,
-        totalRevenue: totalRevenue || 0, pendingOrders, pendingSellers,
+        totalRevenue: totalRevenue || 0,
+        pendingOrders, pendingSellers,
         weeklyOrders, weeklyRevenue: weeklyRevenue || 0,
         totalLivreurs, recentOrders, recentUsers
       }
@@ -53,7 +61,7 @@ exports.getAnalytics = async (req, res) => {
     const period = req.query.period || '30d';
     const daysMap = { '7d': 7, '30d': 30, '90d': 90, all: null };
     const days = period in daysMap ? daysMap[period] : 30;
-    const since = days ? new Date(Date.now() - days * 86400000) : new Date('2000-01-01');
+    const since    = days ? new Date(Date.now() - days * 86400000) : new Date('2000-01-01');
     const prevSince = days ? new Date(Date.now() - 2 * days * 86400000) : new Date('2000-01-01');
     const WHERE = `o.status <> 'cancelled' AND o."createdAt" >= :since`;
 
@@ -86,11 +94,11 @@ exports.getAnalytics = async (req, res) => {
       { type: QueryTypes.SELECT, replacements: { since } }
     );
 
-    const revenue = Number(overview.revenue);
-    const orders = Number(overview.orders);
+    const revenue     = Number(overview.revenue);
+    const orders      = Number(overview.orders);
     const prevRevenue = Number(prev.revenue);
     const growth = prevRevenue > 0 ? Math.round(((revenue - prevRevenue) / prevRevenue) * 1000) / 10 : null;
-    const ouragan = split.find((s) => s.is_ouragan === true) || { revenue: 0, items: 0, orders: 0 };
+    const ouragan    = split.find((s) => s.is_ouragan === true)  || { revenue: 0, items: 0, orders: 0 };
     const marketplace = split.find((s) => s.is_ouragan === false) || { revenue: 0, items: 0, orders: 0 };
 
     res.json({
@@ -102,12 +110,12 @@ exports.getAnalytics = async (req, res) => {
       },
       revenueByCategory: byCategory.map((r) => ({ category: r.category, revenue: Number(r.revenue), orders: Number(r.orders) })),
       ouraganVsMarketplace: {
-        ouragan: { revenue: Number(ouragan.revenue), items: Number(ouragan.items), orders: Number(ouragan.orders) },
+        ouragan:     { revenue: Number(ouragan.revenue),     items: Number(ouragan.items),     orders: Number(ouragan.orders) },
         marketplace: { revenue: Number(marketplace.revenue), items: Number(marketplace.items), orders: Number(marketplace.orders) },
       },
       revenueOverTime: overTime.map((r) => ({ date: r.date, revenue: Number(r.revenue) })),
-      topProducts: topProducts.map((r) => ({ name: r.name, isOuragan: r.is_ouragan, revenue: Number(r.revenue), quantity: Number(r.quantity) })),
-      ordersByStatus: byStatus.map((r) => ({ status: r.status, count: Number(r.count) })),
+      topProducts:     topProducts.map((r) => ({ name: r.name, isOuragan: r.is_ouragan, revenue: Number(r.revenue), quantity: Number(r.quantity) })),
+      ordersByStatus:  byStatus.map((r) => ({ status: r.status, count: Number(r.count) })),
     });
   } catch (err) {
     console.error('getAnalytics error:', err);
@@ -125,8 +133,8 @@ exports.getAllUsers = async (req, res) => {
     if (search) {
       where[Op.or] = [
         { firstName: { [Op.iLike]: `%${search}%` } },
-        { lastName: { [Op.iLike]: `%${search}%` } },
-        { email: { [Op.iLike]: `%${search}%` } }
+        { lastName:  { [Op.iLike]: `%${search}%` } },
+        { email:     { [Op.iLike]: `%${search}%` } }
       ];
     }
     const { count, rows: users } = await User.findAndCountAll({
@@ -192,7 +200,7 @@ exports.getAllProducts = async (req, res) => {
     if (isActive !== undefined) where.isActive = isActive === 'true';
     if (search) {
       where[Op.or] = [
-        { name: { [Op.iLike]: `%${search}%` } },
+        { name:  { [Op.iLike]: `%${search}%` } },
         { brand: { [Op.iLike]: `%${search}%` } }
       ];
     }
@@ -200,7 +208,7 @@ exports.getAllProducts = async (req, res) => {
       where,
       include: [
         { model: ProductImage, as: 'images' },
-        { model: Seller, as: 'seller', attributes: ['shopName'] },
+        { model: Seller,   as: 'seller',   attributes: ['shopName'] },
         { model: Category, as: 'category' }
       ],
       order: [['createdAt', 'DESC']],
@@ -225,11 +233,15 @@ exports.addOuraganProduct = async (req, res) => {
       salePrice: salePrice || null, stock: stock || 0, sku: sku || null,
       brand: brand || null, weight: weight || null, dimensions: dimensions || null,
       tags: tags || null, specifications: specifications || null,
-      isOuragan: isOuragan !== undefined ? isOuragan : true, isFeatured: isFeatured || false
+      isOuragan: isOuragan !== undefined ? isOuragan : true,
+      isFeatured: isFeatured || false
     });
     if (images && images.length > 0) {
       for (let i = 0; i < images.length; i++) {
-        await ProductImage.create({ productId: product.id, url: images[i].url, publicId: images[i].publicId || null, isMain: i === 0, order: i });
+        await ProductImage.create({
+          productId: product.id, url: images[i].url,
+          publicId: images[i].publicId || null, isMain: i === 0, order: i
+        });
       }
     }
     const fullProduct = await Product.findByPk(product.id, { include: [{ model: ProductImage, as: 'images' }] });
@@ -316,7 +328,10 @@ exports.deleteCategory = async (req, res) => {
 exports.createPromo = async (req, res) => {
   try {
     const { code, description, discountType, discountValue, minOrderAmount, maxUses, startDate, endDate } = req.body;
-    const promo = await Promo.create({ code: code.toUpperCase(), description, discountType, discountValue, minOrderAmount: minOrderAmount || 0, maxUses: maxUses || null, startDate, endDate });
+    const promo = await Promo.create({
+      code: code.toUpperCase(), description, discountType, discountValue,
+      minOrderAmount: minOrderAmount || 0, maxUses: maxUses || null, startDate, endDate
+    });
     res.status(201).json({ success: true, message: 'Code promo créé !', promo });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
