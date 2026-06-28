@@ -7,7 +7,9 @@ const {
   Seller,
   Review,
   User,
-  Wishlist
+  Wishlist,
+  Order,
+  OrderItem
 } = require('../models/index');
 
 // ✅ OBTENIR TOUS LES PRODUITS
@@ -30,7 +32,7 @@ exports.getAllProducts = async (req, res) => {
     const where = { isActive: true };
 
     if (category) where.categoryId = category;
-    if (brand) where.brand = { [Op.like]: `%${brand}%` };
+    if (brand) where.brand = { [Op.iLike]: `%${brand}%` };
     if (minPrice || maxPrice) {
       where.price = {};
       if (minPrice) where.price[Op.gte] = minPrice;
@@ -39,9 +41,9 @@ exports.getAllProducts = async (req, res) => {
     if (rating) where.rating = { [Op.gte]: rating };
     if (search) {
       where[Op.or] = [
-        { name: { [Op.like]: `%${search}%` } },
-        { description: { [Op.like]: `%${search}%` } },
-        { brand: { [Op.like]: `%${search}%` } }
+        { name: { [Op.iLike]: `%${search}%` } },
+        { description: { [Op.iLike]: `%${search}%` } },
+        { brand: { [Op.iLike]: `%${search}%` } }
       ];
     }
 
@@ -124,7 +126,7 @@ exports.getFeaturedProducts = async (req, res) => {
   }
 };
 
-// ✅ OBTENIR LES PRODUITS OURAGAN (vendus par toi)
+// ✅ OBTENIR LES PRODUITS OURAGAN
 exports.getOuraganProducts = async (req, res) => {
   try {
     const products = await Product.findAll({
@@ -177,11 +179,33 @@ exports.getProductsByCategory = async (req, res) => {
   }
 };
 
-// ✅ AJOUTER UN AVIS
+// ✅ AJOUTER UN AVIS (achat vérifié obligatoire)
 exports.addReview = async (req, res) => {
   try {
     const { productId } = req.params;
-    const { rating, title, comment, orderId } = req.body;
+    const { rating, title, comment } = req.body;
+
+    // Vérifier que l'utilisateur a bien acheté et reçu ce produit
+    const verifiedPurchase = await OrderItem.findOne({
+      where: { productId },
+      include: [
+        {
+          model: Order,
+          as: 'order',
+          where: {
+            userId: req.user.id,
+            status: 'delivered'
+          }
+        }
+      ]
+    });
+
+    if (!verifiedPurchase) {
+      return res.status(403).json({
+        success: false,
+        message: 'Vous devez avoir acheté et reçu ce produit pour laisser un avis'
+      });
+    }
 
     // Vérifier si l'utilisateur a déjà laissé un avis
     const existingReview = await Review.findOne({
@@ -198,13 +222,14 @@ exports.addReview = async (req, res) => {
     const review = await Review.create({
       userId: req.user.id,
       productId,
-      orderId,
+      orderId: verifiedPurchase.order.id,
       rating,
       title,
-      comment
+      comment,
+      isVerified: true
     });
 
-    // Mettre à jour la note moyenne du produit
+    // Mettre à jour la note moyenne
     const reviews = await Review.findAll({ where: { productId } });
     const avgRating = reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length;
 
@@ -213,7 +238,11 @@ exports.addReview = async (req, res) => {
       { where: { id: productId } }
     );
 
-    res.status(201).json({ success: true, message: 'Avis ajouté !', review });
+    res.status(201).json({
+      success: true,
+      message: 'Avis ajouté ! ✅ Achat vérifié',
+      review
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -230,11 +259,19 @@ exports.toggleWishlist = async (req, res) => {
 
     if (existing) {
       await existing.destroy();
-      return res.status(200).json({ success: true, message: 'Retiré de la wishlist', inWishlist: false });
+      return res.status(200).json({
+        success: true,
+        message: 'Retiré de la wishlist',
+        inWishlist: false
+      });
     }
 
     await Wishlist.create({ userId: req.user.id, productId });
-    res.status(201).json({ success: true, message: 'Ajouté à la wishlist', inWishlist: true });
+    res.status(201).json({
+      success: true,
+      message: 'Ajouté à la wishlist',
+      inWishlist: true
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
