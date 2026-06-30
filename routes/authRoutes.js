@@ -17,5 +17,6 @@ router.post('/login', login);
 router.get('/me', protect, getMe);
 router.put('/update-profile', protect, updateProfile);
 router.put('/change-password', protect, changePassword);
+router.put('/push-token', protect, authController.savePushToken);
 
 module.exports = router;

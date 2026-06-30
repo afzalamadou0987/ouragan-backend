@@ -54,6 +54,10 @@ const User = sequelize.define('User', {
   googleId: {
     type: DataTypes.STRING,
     allowNull: true
+  },
+  pushToken: {
+    type: DataTypes.STRING,
+    allowNull: true
   }
 }, {
   hooks: {

@@ -14,7 +14,6 @@ exports.getDashboardStats = async (req, res) => {
     const totalRevenue  = await Order.sum('totalAmount', { where: { paymentStatus: 'paid' } });
     const pendingOrders  = await Order.count({ where: { status: 'pending' } });
     const pendingSellers = await Seller.count({ where: { isVerified: false } });
-
     const recentOrders = await Order.findAll({
       include: [
         { model: User, as: 'user', attributes: ['firstName', 'lastName', 'email'] },
@@ -22,26 +21,22 @@ exports.getDashboardStats = async (req, res) => {
       ],
       order: [['createdAt', 'DESC']], limit: 10
     });
-
     const recentUsers = await User.findAll({
       attributes: { exclude: ['password'] },
       order: [['createdAt', 'DESC']], limit: 5
     });
-
     const last7Days = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const weeklyOrders  = await Order.count({ where: { createdAt: { [Op.gte]: last7Days } } });
     const weeklyRevenue = await Order.sum('totalAmount', {
       where: { paymentStatus: 'paid', createdAt: { [Op.gte]: last7Days } }
     });
-
-    const totalLivreurs = 0; // livreur pas encore dans l'enum
+    const totalLivreurs = 0;
 
     res.status(200).json({
       success: true,
       stats: {
         totalUsers, totalSellers, totalProducts, totalOrders,
-        totalRevenue: totalRevenue || 0,
-        pendingOrders, pendingSellers,
+        totalRevenue: totalRevenue || 0, pendingOrders, pendingSellers,
         weeklyOrders, weeklyRevenue: weeklyRevenue || 0,
         totalLivreurs, recentOrders, recentUsers
       }
@@ -95,32 +90,27 @@ exports.getAnalytics = async (req, res) => {
     const orders      = Number(overview.orders);
     const prevRevenue = Number(prev.revenue);
     const growth = prevRevenue > 0 ? Math.round(((revenue - prevRevenue) / prevRevenue) * 1000) / 10 : null;
-    const ouragan     = split.find((s) => s.is_ouragan === true)  || { revenue: 0, items: 0, orders: 0 };
-    const marketplace = split.find((s) => s.is_ouragan === false) || { revenue: 0, items: 0, orders: 0 };
+    const ouragan     = split.find(s => s.is_ouragan === true)  || { revenue: 0, items: 0, orders: 0 };
+    const marketplace = split.find(s => s.is_ouragan === false) || { revenue: 0, items: 0, orders: 0 };
 
     res.json({
       success: true, period,
-      overview: {
-        totalRevenue: revenue, totalOrders: orders,
-        avgOrderValue: orders ? Math.round(revenue / orders) : 0,
-        totalCustomers: Number(overview.customers), revenueGrowth: growth,
-      },
-      revenueByCategory: byCategory.map((r) => ({ category: r.category, revenue: Number(r.revenue), orders: Number(r.orders) })),
+      overview: { totalRevenue: revenue, totalOrders: orders, avgOrderValue: orders ? Math.round(revenue / orders) : 0, totalCustomers: Number(overview.customers), revenueGrowth: growth },
+      revenueByCategory: byCategory.map(r => ({ category: r.category, revenue: Number(r.revenue), orders: Number(r.orders) })),
       ouraganVsMarketplace: {
         ouragan:     { revenue: Number(ouragan.revenue),     items: Number(ouragan.items),     orders: Number(ouragan.orders) },
         marketplace: { revenue: Number(marketplace.revenue), items: Number(marketplace.items), orders: Number(marketplace.orders) },
       },
-      revenueOverTime: overTime.map((r) => ({ date: r.date, revenue: Number(r.revenue) })),
-      topProducts:     topProducts.map((r) => ({ name: r.name, isOuragan: r.is_ouragan, revenue: Number(r.revenue), quantity: Number(r.quantity) })),
-      ordersByStatus:  byStatus.map((r) => ({ status: r.status, count: Number(r.count) })),
+      revenueOverTime: overTime.map(r => ({ date: r.date, revenue: Number(r.revenue) })),
+      topProducts:     topProducts.map(r => ({ name: r.name, isOuragan: r.is_ouragan, revenue: Number(r.revenue), quantity: Number(r.quantity) })),
+      ordersByStatus:  byStatus.map(r => ({ status: r.status, count: Number(r.count) })),
     });
   } catch (err) {
-    console.error('getAnalytics error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
-// ✅ GESTION UTILISATEURS
+// ✅ UTILISATEURS
 exports.getAllUsers = async (req, res) => {
   try {
     const { page = 1, limit = 20, role, search } = req.query;
@@ -136,8 +126,7 @@ exports.getAllUsers = async (req, res) => {
     }
     const { count, rows: users } = await User.findAndCountAll({
       where, attributes: { exclude: ['password'] },
-      order: [['createdAt', 'DESC']],
-      limit: parseInt(limit), offset: parseInt(offset)
+      order: [['createdAt', 'DESC']], limit: parseInt(limit), offset: parseInt(offset)
     });
     res.status(200).json({ success: true, count, totalPages: Math.ceil(count / limit), currentPage: parseInt(page), users });
   } catch (error) {
@@ -145,7 +134,6 @@ exports.getAllUsers = async (req, res) => {
   }
 };
 
-// ✅ TOGGLE USER
 exports.toggleUserStatus = async (req, res) => {
   try {
     const user = await User.findByPk(req.params.id);
@@ -157,7 +145,7 @@ exports.toggleUserStatus = async (req, res) => {
   }
 };
 
-// ✅ GESTION VENDEURS
+// ✅ VENDEURS
 exports.getAllSellers = async (req, res) => {
   try {
     const { page = 1, limit = 20, isVerified } = req.query;
@@ -167,8 +155,7 @@ exports.getAllSellers = async (req, res) => {
     const { count, rows: sellers } = await Seller.findAndCountAll({
       where,
       include: [{ model: User, as: 'user', attributes: ['firstName', 'lastName', 'email'] }],
-      order: [['createdAt', 'DESC']],
-      limit: parseInt(limit), offset: parseInt(offset)
+      order: [['createdAt', 'DESC']], limit: parseInt(limit), offset: parseInt(offset)
     });
     res.status(200).json({ success: true, count, totalPages: Math.ceil(count / limit), currentPage: parseInt(page), sellers });
   } catch (error) {
@@ -176,7 +163,6 @@ exports.getAllSellers = async (req, res) => {
   }
 };
 
-// ✅ VERIFIER VENDEUR
 exports.verifySeller = async (req, res) => {
   try {
     const seller = await Seller.findByPk(req.params.id);
@@ -188,7 +174,7 @@ exports.verifySeller = async (req, res) => {
   }
 };
 
-// ✅ GESTION PRODUITS
+// ✅ PRODUITS
 exports.getAllProducts = async (req, res) => {
   try {
     const { page = 1, limit = 20, search, isActive } = req.query;
@@ -208,8 +194,7 @@ exports.getAllProducts = async (req, res) => {
         { model: Seller,   as: 'seller',   attributes: ['shopName'] },
         { model: Category, as: 'category' }
       ],
-      order: [['createdAt', 'DESC']],
-      limit: parseInt(limit), offset: parseInt(offset)
+      order: [['createdAt', 'DESC']], limit: parseInt(limit), offset: parseInt(offset)
     });
     res.status(200).json({ success: true, count, totalPages: Math.ceil(count / limit), currentPage: parseInt(page), products });
   } catch (error) {
@@ -217,7 +202,6 @@ exports.getAllProducts = async (req, res) => {
   }
 };
 
-// ✅ AJOUTER PRODUIT OURAGAN
 exports.addOuraganProduct = async (req, res) => {
   try {
     const { categoryId, name, description, price, salePrice, stock, sku, brand, weight, dimensions, tags, specifications, isFeatured, isOuragan, images } = req.body;
@@ -230,15 +214,11 @@ exports.addOuraganProduct = async (req, res) => {
       salePrice: salePrice || null, stock: stock || 0, sku: sku || null,
       brand: brand || null, weight: weight || null, dimensions: dimensions || null,
       tags: tags || null, specifications: specifications || null,
-      isOuragan: isOuragan !== undefined ? isOuragan : true,
-      isFeatured: isFeatured || false
+      isOuragan: isOuragan !== undefined ? isOuragan : true, isFeatured: isFeatured || false
     });
-    if (images && images.length > 0) {
+    if (images?.length > 0) {
       for (let i = 0; i < images.length; i++) {
-        await ProductImage.create({
-          productId: product.id, url: images[i].url,
-          publicId: images[i].publicId || null, isMain: i === 0, order: i
-        });
+        await ProductImage.create({ productId: product.id, url: images[i].url, publicId: images[i].publicId || null, isMain: i === 0, order: i });
       }
     }
     const fullProduct = await Product.findByPk(product.id, { include: [{ model: ProductImage, as: 'images' }] });
@@ -248,7 +228,7 @@ exports.addOuraganProduct = async (req, res) => {
   }
 };
 
-// ✅ GESTION COMMANDES
+// ✅ COMMANDES
 exports.getAllOrders = async (req, res) => {
   try {
     const { page = 1, limit = 20, status } = req.query;
@@ -261,8 +241,7 @@ exports.getAllOrders = async (req, res) => {
         { model: User, as: 'user', attributes: ['firstName', 'lastName', 'email'] },
         { model: OrderItem, as: 'items' }
       ],
-      order: [['createdAt', 'DESC']],
-      limit: parseInt(limit), offset: parseInt(offset)
+      order: [['createdAt', 'DESC']], limit: parseInt(limit), offset: parseInt(offset)
     });
     res.status(200).json({ success: true, count, totalPages: Math.ceil(count / limit), currentPage: parseInt(page), orders });
   } catch (error) {
@@ -270,7 +249,6 @@ exports.getAllOrders = async (req, res) => {
   }
 };
 
-// ✅ MODIFIER STATUT COMMANDE
 exports.updateOrderStatus = async (req, res) => {
   try {
     const { status, trackingNumber } = req.body;
@@ -281,6 +259,18 @@ exports.updateOrderStatus = async (req, res) => {
     if (status === 'delivered') updateData.deliveredAt = new Date();
     await order.update(updateData);
     await OrderItem.update({ status }, { where: { orderId: req.params.id } });
+
+    // ✅ Notif push client
+    try {
+      const { notifyOrderStatusChanged, notifyOrderDelivered } = require('../services/notificationService');
+      const client = await User.findByPk(order.userId, { attributes: ['pushToken'] });
+      if (status === 'delivered') {
+        await notifyOrderDelivered(client, order);
+      } else {
+        await notifyOrderStatusChanged(client, order, status);
+      }
+    } catch(e) { console.error('notif error:', e); }
+
     res.status(200).json({ success: true, message: 'Statut mis à jour !', order });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -325,10 +315,7 @@ exports.deleteCategory = async (req, res) => {
 exports.createPromo = async (req, res) => {
   try {
     const { code, description, discountType, discountValue, minOrderAmount, maxUses, startDate, endDate } = req.body;
-    const promo = await Promo.create({
-      code: code.toUpperCase(), description, discountType, discountValue,
-      minOrderAmount: minOrderAmount || 0, maxUses: maxUses || null, startDate, endDate
-    });
+    const promo = await Promo.create({ code: code.toUpperCase(), description, discountType, discountValue, minOrderAmount: minOrderAmount || 0, maxUses: maxUses || null, startDate, endDate });
     res.status(201).json({ success: true, message: 'Code promo créé !', promo });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
